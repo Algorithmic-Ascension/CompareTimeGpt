@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+# TODO move paramters into Powershell script
 model = "timegpt-1"
 # model = 'timegpt-1-long-horizon'
 # model = 'long-horizon'
@@ -156,6 +157,8 @@ response = requests.post(
     },
 )
 jsonresp = response.json()["data"]["forecast"]["data"]
+
+# TODO save requests as well
 filename = f"{datetime.now().strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
 if not os.path.exists("Responses"):
     os.makedirs("Responses")
@@ -163,6 +166,7 @@ if not os.path.exists("Responses"):
 with open(f"Responses/json_{filename}.json", "w+") as output_file_handler:
     output_file_handler.write(json.dumps(jsonresp, indent=4))
 
+# TODO move calculate into separate python file, calculating test data from data files and json responses
 df_predicted = extract_json_data(jsonresp)
 # Calculate the MSE
 rmse = np.sqrt(((df_predicted - data_test) ** 2).mean())
