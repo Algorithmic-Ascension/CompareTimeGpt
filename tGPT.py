@@ -133,9 +133,24 @@ def generate_body_table(data):
     return melted_df[["Metric_Country", "Period", "Value"]].values.tolist()
 
 
+def save_files(jsonbody_request_data, jsonresp):
+    if not os.path.exists("Requests"):
+        os.makedirs("Requests")
+    if not os.path.exists("Responses"):
+        os.makedirs("Responses")
+    timestamp = datetime.now()
+    filename_request = f"{timestamp.strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
+    with open(f"Requests/{filename_request}.json", "w+") as output_file_handler:
+        output_file_handler.write(json.dumps(jsonbody_request_data, indent=4))
+    filename_response = f"{timestamp.strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
+    with open(f"Responses/{filename_response}.json", "w+") as output_file_handler:
+        output_file_handler.write(json.dumps(jsonresp, indent=4))
+
+
 data_full = load_data(selected_countries)
 # TODO repeat for experiments with different time series
 data_training, data_test = split_data(data_full)
+jsonbody_request_data = generate_body_table(data_training)
 response = requests.post(
     "https://dashboard.nixtla.io/api/forecast_multi_series",
     json={
@@ -147,7 +162,7 @@ response = requests.post(
         "finetune_loss": finetune_loss,
         "y": {
             "columns": ["unique_id", "ds", "y"],
-            "data": generate_body_table(data_training),
+            "data": jsonbody_request_data,
         },
     },
     headers={
@@ -157,15 +172,7 @@ response = requests.post(
     },
 )
 jsonresp = response.json()["data"]["forecast"]["data"]
-
-# TODO save requests as well
-filename = f"{datetime.now().strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
-if not os.path.exists("Responses"):
-    os.makedirs("Responses")
-
-with open(f"Responses/json_{filename}.json", "w+") as output_file_handler:
-    output_file_handler.write(json.dumps(jsonresp, indent=4))
-
+save_files(jsonbody_request_data, jsonresp)
 # TODO move calculate into separate python file, calculating test data from data files and json responses
 df_predicted = extract_json_data(jsonresp)
 # Calculate the MSE
