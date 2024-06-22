@@ -9,9 +9,13 @@ import statsmodels.api as sm
 import pandas as pd
 import numpy as np
 
-GDP = pd.read_csv("./gdp.csv", sep=",", header=0, usecols=list(range(1, 34)))
-Cons = pd.read_csv("./consumption.csv", sep=",", header=0, usecols=list(range(1, 34)))
-Un = pd.read_csv("./unemployment.csv", sep=",", header=0, usecols=list(range(1, 34)))
+gdp = pd.read_csv("./gdp.csv", sep=",", header=0, usecols=list(range(1, 34)))
+consumption = pd.read_csv(
+    "./consumption.csv", sep=",", header=0, usecols=list(range(1, 34))
+)
+unemployment = pd.read_csv(
+    "./unemployment.csv", sep=",", header=0, usecols=list(range(1, 34))
+)
 
 mse1 = [[] for each in range(6)]
 
@@ -21,10 +25,10 @@ for i in range(6):
     curlen = 0
 
     for j in range(33):
-        Train_x = GDP.iloc[: -3 - i, j]
-        Train_y = GDP.iloc[1 + i : -2, j]
-        Test_x = sm.add_constant(GDP.iloc[-3 - i : -1 - i, j])
-        Test_y = GDP.iloc[-2:, j]
+        Train_x = gdp.iloc[: -3 - i, j]
+        Train_y = gdp.iloc[1 + i : -2, j]
+        Test_x = sm.add_constant(gdp.iloc[-3 - i : -1 - i, j])
+        Test_y = gdp.iloc[-2:, j]
         idx = Test_y[Test_y < -99].index
         Test_y = Test_y.drop(idx)
         Test_x = Test_x.drop(idx - 1 - i)
@@ -61,10 +65,10 @@ for i in range(6):
 
     for j in range(33):
         if j == 0:
-            Train_x = (sm.add_constant(GDP.iloc[: -3 - i, j])).to_numpy()
-            Train_y = GDP.iloc[1 + i : -2, j].to_numpy()
-            Test_x = sm.add_constant(GDP.iloc[-3 - i : -1 - i, j])
-            Test_y = GDP.iloc[-2:, j]
+            Train_x = (sm.add_constant(gdp.iloc[: -3 - i, j])).to_numpy()
+            Train_y = gdp.iloc[1 + i : -2, j].to_numpy()
+            Test_x = sm.add_constant(gdp.iloc[-3 - i : -1 - i, j])
+            Test_y = gdp.iloc[-2:, j]
             idx = Test_y[Test_y < -99].index
             Test_y = Test_y.drop(idx)
             Test_x = Test_x.drop(idx - 1 - i)
@@ -72,10 +76,10 @@ for i in range(6):
             Test_y = Test_y.to_numpy()
 
         else:
-            Train_x_t = (sm.add_constant(GDP.iloc[: -3 - i, j])).to_numpy()
-            Train_y_t = GDP.iloc[1 + i : -2, j].to_numpy()
-            Test_x_t = sm.add_constant(GDP.iloc[-3 - i : -1 - i, j])
-            Test_y_t = GDP.iloc[-2:, j]
+            Train_x_t = (sm.add_constant(gdp.iloc[: -3 - i, j])).to_numpy()
+            Train_y_t = gdp.iloc[1 + i : -2, j].to_numpy()
+            Test_x_t = sm.add_constant(gdp.iloc[-3 - i : -1 - i, j])
+            Test_y_t = gdp.iloc[-2:, j]
             idx = Test_y_t[Test_y_t < -99].index
             Test_y_t = Test_y_t.drop(idx)
             Test_x_t = Test_x_t.drop(idx - 1 - i)
@@ -122,24 +126,28 @@ for i in range(6):
 
     for j in range(33):
         Train_x = pd.concat(
-            [GDP.iloc[: -3 - i, j], Cons.iloc[: -3 - i, j], Un.iloc[: -3 - i, j]],
+            [
+                gdp.iloc[: -3 - i, j],
+                consumption.iloc[: -3 - i, j],
+                unemployment.iloc[: -3 - i, j],
+            ],
             axis=1,
             ignore_index=True,
         )
-        Train_y = GDP.iloc[1 + i : -2, j]
+        Train_y = gdp.iloc[1 + i : -2, j]
         Test_x = sm.add_constant(
             pd.concat(
                 [
-                    GDP.iloc[-3 - i : -1 - i, j],
-                    Cons.iloc[-3 - i : -1 - i, j],
-                    Un.iloc[-3 - i : -1 - i, j],
+                    gdp.iloc[-3 - i : -1 - i, j],
+                    consumption.iloc[-3 - i : -1 - i, j],
+                    unemployment.iloc[-3 - i : -1 - i, j],
                 ],
                 axis=1,
                 ignore_index=True,
             ),
             has_constant="add",
         )
-        Test_y = GDP.iloc[-2:, j]
+        Test_y = gdp.iloc[-2:, j]
         idx = Test_y[Test_y < -99].index
         Test_y = Test_y.drop(idx)
         Test_x = Test_x.drop(idx - 1 - i)
@@ -178,28 +186,28 @@ for i in range(6):
             Train_x = sm.add_constant(
                 pd.concat(
                     [
-                        GDP.iloc[: -3 - i, j],
-                        Cons.iloc[: -3 - i, j],
-                        Un.iloc[: -3 - i, j],
+                        gdp.iloc[: -3 - i, j],
+                        consumption.iloc[: -3 - i, j],
+                        unemployment.iloc[: -3 - i, j],
                     ],
                     axis=1,
                     ignore_index=True,
                 )
             )
-            Train_y = GDP.iloc[1 + i : -2, j]
+            Train_y = gdp.iloc[1 + i : -2, j]
             Test_x = sm.add_constant(
                 pd.concat(
                     [
-                        GDP.iloc[-3 - i : -1 - i, j],
-                        Cons.iloc[-3 - i : -1 - i, j],
-                        Un.iloc[-3 - i : -1 - i, j],
+                        gdp.iloc[-3 - i : -1 - i, j],
+                        consumption.iloc[-3 - i : -1 - i, j],
+                        unemployment.iloc[-3 - i : -1 - i, j],
                     ],
                     axis=1,
                     ignore_index=True,
                 ),
                 has_constant="add",
             )
-            Test_y = GDP.iloc[-2:, j]
+            Test_y = gdp.iloc[-2:, j]
             idx = Test_y[Test_y < -99].index
             Test_y = Test_y.drop(idx)
             Test_x = Test_x.drop(idx - 1 - i)
@@ -210,28 +218,28 @@ for i in range(6):
             Train_x_t = sm.add_constant(
                 pd.concat(
                     [
-                        GDP.iloc[: -3 - i, j],
-                        Cons.iloc[: -3 - i, j],
-                        Un.iloc[: -3 - i, j],
+                        gdp.iloc[: -3 - i, j],
+                        consumption.iloc[: -3 - i, j],
+                        unemployment.iloc[: -3 - i, j],
                     ],
                     axis=1,
                     ignore_index=True,
                 )
             )
-            Train_y_t = GDP.iloc[1 + i : -2, j]
+            Train_y_t = gdp.iloc[1 + i : -2, j]
             Test_x_t = sm.add_constant(
                 pd.concat(
                     [
-                        GDP.iloc[-3 - i : -1 - i, j],
-                        Cons.iloc[-3 - i : -1 - i, j],
-                        Un.iloc[-3 - i : -1 - i, j],
+                        gdp.iloc[-3 - i : -1 - i, j],
+                        consumption.iloc[-3 - i : -1 - i, j],
+                        unemployment.iloc[-3 - i : -1 - i, j],
                     ],
                     axis=1,
                     ignore_index=True,
                 ),
                 has_constant="add",
             )
-            Test_y_t = GDP.iloc[-2:, j]
+            Test_y_t = gdp.iloc[-2:, j]
             idx = Test_y_t[Test_y_t < -99].index
             Test_y_t = Test_y_t.drop(idx)
             Test_x_t = Test_x_t.drop(idx - 1 - i)
