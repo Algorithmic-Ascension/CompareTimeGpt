@@ -1,19 +1,16 @@
-import json
 import numpy as np
 import pandas as pd
 import requests
-import os
-from datetime import datetime
 from pathlib import Path
 
-# TODO move paramters into Powershell script
+# TODO move parameters into main Python file
 model = "timegpt-1"
 # model = 'timegpt-1-long-horizon'
 # model = 'long-horizon'
 # model = 'short-horizon'
 # model = 'azureai'
 clean_ex_first = True
-finetune_steps = 0
+finetune_steps = 15
 # finetune_loss = 'default'
 # finetune_loss = 'mae'
 finetune_loss = "mse"
@@ -45,17 +42,10 @@ selected_countries = [
     "Sweden",
     "United Kingdom",
     "United States",
-    # 'United States', 'Japan'
-    # , 'Canada', 'Australia', 'United Kingdom', 'Portugal'
-    # 'Netherlands', 'Sweden', 'Belgium', 'France', 'Italy', 'Denmark', 'Luxembourg',
-    # 'Spain', 'Mexico', 'Finland', 'Norway', 'Korea', 'Germany', 'Austria', 'Greece',
-    # 'Iceland', 'Switzerland', 'New Zealand', 'Turkey', 'Chile', 'Czechia',
-    # 'Slovak Republic', 'Israel', 'Hungary', 'Slovenia', 'Poland', 'Estonia',
-    # 'Latvia', 'Lithuania', 'Costa Rica', 'Colombia'
 ]
 
 filter_missing_data = lambda df: df[
-    (df["Period"] > "1993-Q0") & (df["Period"] < "2024-Q0")
+    (df["Period"] > "2000-Q0") & (df["Period"] < "2024-Q0")
 ]
 
 
@@ -98,32 +88,6 @@ def load_data(selected_countries):
     return filter_missing_data(df)
 
 
-def extract_json_data(response_data):
-    convert_period = lambda s: (
-        str(int(s[:4]) + 1) + "-Q1"
-        if s[5:] == "12-31"
-        else (
-            s[:5] + "Q2"
-            if s[5:] == "03-31"
-            else (
-                s[:5] + "Q3"
-                if s[5:] == "06-30"
-                else s[:5] + "Q4" if s[5:] == "09-30" else s[5:]
-            )
-        )
-    )
-    df = pd.DataFrame(response_data, columns=["Metric_Country", "Period", "Value"])
-    df["Period"] = df["Period"].apply(convert_period)
-    df[["Metric", "Country"]] = df["Metric_Country"].str.split("_", expand=True)
-    df_pivot = (
-        df.drop(columns=["Metric_Country"])
-        .pivot_table(index=["Period", "Country"], columns="Metric", values="Value")
-        .reset_index()
-    )
-    df_pivot.columns.name = None
-    return df_pivot.set_index(["Period", "Country"])
-
-
 # GDP only
 def generate_body_table(data):
     melted_df = data.reset_index().melt(
@@ -131,20 +95,6 @@ def generate_body_table(data):
     )
     melted_df["Metric_Country"] = melted_df["Metric"] + "_" + melted_df["Country"]
     return melted_df[["Metric_Country", "Period", "Value"]].values.tolist()
-
-
-def save_files(jsonbody_request_data, jsonresp):
-    if not os.path.exists("Requests"):
-        os.makedirs("Requests")
-    if not os.path.exists("Responses"):
-        os.makedirs("Responses")
-    timestamp = datetime.now()
-    filename_request = f"{timestamp.strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
-    with open(f"Requests/{filename_request}.json", "w+") as output_file_handler:
-        output_file_handler.write(json.dumps(jsonbody_request_data, indent=4))
-    filename_response = f"{timestamp.strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
-    with open(f"Responses/{filename_response}.json", "w+") as output_file_handler:
-        output_file_handler.write(json.dumps(jsonresp, indent=4))
 
 
 data_full = load_data(selected_countries)
@@ -172,11 +122,55 @@ response = requests.post(
     },
 )
 jsonresp = response.json()["data"]["forecast"]["data"]
-save_files(jsonbody_request_data, jsonresp)
+
+
 # TODO move calculate into separate python file, calculating test data from data files and json responses
+def extract_json_data(response_data):
+    convert_period = lambda s: (
+        str(int(s[:4]) + 1) + "-Q1"
+        if s[5:] == "12-31"
+        else (
+            s[:5] + "Q2"
+            if s[5:] == "03-31"
+            else (
+                s[:5] + "Q3"
+                if s[5:] == "06-30"
+                else s[:5] + "Q4" if s[5:] == "09-30" else s[5:]
+            )
+        )
+    )
+    df = pd.DataFrame(response_data, columns=["Metric_Country", "Period", "Value"])
+    df["Period"] = df["Period"].apply(convert_period)
+    df[["Metric", "Country"]] = df["Metric_Country"].str.split("_", expand=True)
+    df_pivot = (
+        df.drop(columns=["Metric_Country"])
+        .pivot_table(index=["Period", "Country"], columns="Metric", values="Value")
+        .reset_index()
+    )
+    df_pivot.columns.name = None
+    return df_pivot.set_index(["Period", "Country"])
+
+
 df_predicted = extract_json_data(jsonresp)
 # Calculate the MSE
 rmse = np.sqrt(((df_predicted - data_test) ** 2).mean())
 
 print("RMSE for each column:")
 print(rmse)
+
+# import json
+# import os
+# from datetime import datetime
+# def save_files(jsonbody_request_data, jsonresp, rmse):
+#     if not os.path.exists("Requests"):
+#         os.makedirs("Requests")
+#     if not os.path.exists("Responses"):
+#         os.makedirs("Responses")
+#     timestamp = datetime.now()
+#     filename_request = f"{timestamp.strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}.txt"
+#     with open(f"Requests/{filename_request}.json", "w+") as output_file_handler:
+#         output_file_handler.write(json.dumps(jsonbody_request_data, indent=4))
+#     filename_response = f"{timestamp.strftime('%Y-%m-%dT%H%M%S')}_{model}_{finetune_loss}_{finetune_steps}_{clean_ex_first}_{}.txt"
+#     with open(f"Responses/{filename_response}.json", "w+") as output_file_handler:
+#         output_file_handler.write(json.dumps(jsonresp, indent=4))
+# save_files(jsonbody_request_data, jsonresp, rmse)
