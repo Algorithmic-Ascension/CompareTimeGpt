@@ -86,7 +86,6 @@ def load_data(selected_countries):
 
 
 data_full = load_data(selected_countries)
-# TODO repeat for experiments with different time series
 
 # finetune_loss mse
 # RMSE for forecast_horizon 1 finetune mse 43: 0.030962689630510458
