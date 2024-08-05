@@ -1,6 +1,7 @@
 from TimeGptClient import TimeGptClient
 import numpy as np
 import pandas as pd
+import time
 
 # python .\main.py -m .\TimeGptClient.py
 
@@ -22,7 +23,10 @@ selected_countries = [
     "Austria",
     "Belgium",
     "Canada",
+    "Chile",
+    "Czechia",
     "Denmark",
+    "Estonia",
     "Finland",
     "France",
     "G7",
@@ -113,12 +117,27 @@ data_full = load_data(selected_countries)
 
 # finetune_loss rmse
 # RMSE for forecast_horizon 1 finetune rmse 40: 0.03139025746377753
+# RMSE for forecast_horizon 2 finetune rmse 34: 0.03460086005674839
+# RMSE for forecast_horizon 3 finetune rmse 30: 0.029738587917040836
+# RMSE for forecast_horizon 4 finetune rmse 27: 0.04026494214368676
+# RMSE for forecast_horizon 5 finetune rmse 28: 0.029208335669452835
+# RMSE for forecast_horizon 6 finetune rmse 29: 0.03468535072426604
 
-
-for forecast_horizon in [1, 2, 3, 4, 5, 6]:
+# there is an optimization to be made to use all the data points from an API
+# but that would slightly lower performance
+for forecast_horizon in [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+]:
     print()
+    time.sleep(1)
 
     # argmin of average_rmse
+    # grid search
     finetune_cache = {}
     for finetune_steps in range(0, 51, 5):
         average_rmse = calculate_RMSE(2, finetune_steps)
@@ -127,7 +146,7 @@ for forecast_horizon in [1, 2, 3, 4, 5, 6]:
             f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {average_rmse}"
         )
     approximate_steps = min(finetune_cache, key=finetune_cache.get)
-    for finetune_steps in range(max(0, approximate_steps - 5), approximate_steps + 5):
+    for finetune_steps in range(max(0, approximate_steps - 4), approximate_steps + 4):
         average_rmse = calculate_RMSE(2, finetune_steps)
         finetune_cache[finetune_steps] = average_rmse
         print(
