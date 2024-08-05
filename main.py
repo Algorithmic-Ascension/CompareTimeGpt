@@ -45,13 +45,15 @@ filter_missing_data = lambda df: df[
 ]
 
 
-def split_data(df, forecast_horizon):
+def split_data(df, forecast_horizon, data_shift):
     training_list = []
     test_list = []
     grouped = df.sort_values(by=["Country", "Period"]).groupby("Country")
     for _, group in grouped:
-        training_list.append(group.iloc[:-forecast_horizon])
-        test_list.append(group.iloc[-forecast_horizon:])
+        training_list.append(group.iloc[: -(forecast_horizon + data_shift)])
+        test_list.append(
+            group.iloc[len(group) - data_shift - 1 : len(group) - data_shift]
+        )
     df_training = pd.concat(training_list)
     df_test = pd.concat(test_list)
     return (
@@ -85,57 +87,51 @@ def load_data(selected_countries):
     return filter_missing_data(df)
 
 
+def calculate_RMSE(data_shifts, finetune_steps):
+    total_squared_error = 0
+    total_count = 0
+    for data_shift in range(data_shifts):
+        data_training, data_test = split_data(data_full, forecast_horizon, data_shift)
+        df_predicted = TimeGptClient.forecast_multi_series(
+            data_training,
+            model,
+            clean_ex_first,
+            finetune_steps,
+            finetune_loss,
+            forecast_horizon,
+        )
+        last_quarter = df_predicted.index.get_level_values("Period").max()
+        errors_GDP = (df_predicted.loc[last_quarter] - data_test).GDP
+        total_squared_error += (errors_GDP**2).sum()
+        total_count += len(errors_GDP)
+    return np.sqrt(total_squared_error / total_count)
+
+
 data_full = load_data(selected_countries)
 
 # finetune_loss mse
-# RMSE for forecast_horizon 1 finetune mse 43: 0.030962689630510458
-# RMSE for forecast_horizon 2 finetune mse 34: 0.03646148353703208
-# RMSE for forecast_horizon 3 finetune mse 31: 0.07123146607394658
-# RMSE for forecast_horizon 4 finetune mse 00: 0.05753704201756719
-# RMSE for forecast_horizon 5 finetune mse 08: 0.04281400348816353
-# RMSE for forecast_horizon 6 finetune mse 02: 0.047832236540700415
 
 # finetune_loss rmse
-# RMSE for forecast_horizon 1 finetune rmse 39: 0.03094369411200133
-# RMSE for forecast_horizon 2 finetune rmse 34: 0.03647808932147662
-# RMSE for forecast_horizon 3 finetune rmse 25: 0.0707391428871976
-# RMSE for forecast_horizon 4 finetune rmse 00: 0.05753704391472815
-# RMSE for forecast_horizon 5 finetune rmse 10: 0.04284289681635131
-# RMSE for forecast_horizon 6 finetune rmse 01: 0.04787052631138558
+# RMSE for forecast_horizon 1 finetune rmse 40: 0.03139025746377753
+
 
 for forecast_horizon in [1, 2, 3, 4, 5, 6]:
     print()
-    data_training, data_test = split_data(data_full, forecast_horizon)
 
+    # argmin of average_rmse
     finetune_cache = {}
     for finetune_steps in range(0, 51, 5):
-        df_predicted = TimeGptClient.forecast_multi_series(
-            data_training,
-            model,
-            clean_ex_first,
-            finetune_steps,
-            finetune_loss,
-            forecast_horizon,
-        )
-        rmse = np.sqrt(((df_predicted - data_test) ** 2).mean())
-        finetune_cache[finetune_steps] = rmse.GDP
+        average_rmse = calculate_RMSE(2, finetune_steps)
+        finetune_cache[finetune_steps] = average_rmse
         print(
-            f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {rmse.GDP}"
+            f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {average_rmse}"
         )
     approximate_steps = min(finetune_cache, key=finetune_cache.get)
     for finetune_steps in range(max(0, approximate_steps - 5), approximate_steps + 5):
-        df_predicted = TimeGptClient.forecast_multi_series(
-            data_training,
-            model,
-            clean_ex_first,
-            finetune_steps,
-            finetune_loss,
-            forecast_horizon,
-        )
-        rmse = np.sqrt(((df_predicted - data_test) ** 2).mean())
-        finetune_cache[finetune_steps] = rmse.GDP
+        average_rmse = calculate_RMSE(2, finetune_steps)
+        finetune_cache[finetune_steps] = average_rmse
         print(
-            f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {rmse.GDP}"
+            f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {average_rmse}"
         )
 
     finetune_for_smallest_rmse = min(finetune_cache, key=finetune_cache.get)
