@@ -18,6 +18,7 @@ finetune_loss = "rmse"
 # finetune_loss = 'mape'
 # finetune_loss = 'smape'
 
+# Cameron selected countries
 selected_countries = [
     "Australia",
     "Austria",
@@ -27,33 +28,38 @@ selected_countries = [
     "Czechia",
     "Denmark",
     "Estonia",
+    "Euro area (20 countries)",
+    "European Union (27 countries from 01/02/2020)",
     "Finland",
     "France",
     "G7",
+    "Greece",
+    "Hungary",
+    "Israel",
     "Italy",
     "Japan",
     "Korea",
+    "Latvia",
+    "Lithuania",
     "Luxembourg",
     "Mexico",
     "Netherlands",
     "Norway",
+    "Poland",
     "Portugal",
+    "Slovak Republic",
+    "Slovenia",
     "Spain",
     "Sweden",
     "United Kingdom",
     "United States",
 ]
 
-filter_missing_data = lambda df: df[
-    (df["Period"] > "2000-Q0") & (df["Period"] < "2024-Q0")
-]
-
 
 def split_data(df, forecast_horizon, data_shift):
     training_list = []
     test_list = []
-    grouped = df.sort_values(by=["Country", "Period"]).groupby("Country")
-    for _, group in grouped:
+    for _, group in df.groupby("Country"):
         training_list.append(group.iloc[: -(forecast_horizon + data_shift)])
         test_list.append(
             group.iloc[len(group) - data_shift - 1 : len(group) - data_shift]
@@ -73,25 +79,60 @@ def split_data(df, forecast_horizon, data_shift):
 
 
 def load_data(selected_countries):
-    consumption = pd.read_csv("./consumption.csv")[
-        ["Period"] + selected_countries
-    ].melt(id_vars=["Period"], var_name="Country", value_name="Consumption")
-    unemployment = pd.read_csv("./unemployment.csv")[
-        ["Period"] + selected_countries
-    ].melt(id_vars=["Period"], var_name="Country", value_name="Unemployment")
-    gdp = pd.read_csv("./gdp.csv")[["Period"] + selected_countries].melt(
-        id_vars=["Period"], var_name="Country", value_name="GDP"
+    def filter_missing_data_from_countries(df):
+        print("Determining countries...")
+        missing_data_countries = (
+            df[
+                (df["Consumption"] == -1)
+                | (df["Consumption"] == -100)
+                | (df["Unemployment"] == -1)
+                | (df["Unemployment"] == -100)
+                | (df["GDP"] == -1)
+                | (df["GDP"] == -100)
+            ]
+            .index.get_level_values("Country")
+            .unique()
+        )
+        df = df[~df.index.get_level_values("Country").isin(missing_data_countries)]
+
+        print("\nMissing countries:")
+        for country in missing_data_countries:
+            print(country + ",")
+
+        print("\nIncluded countries:")
+        for country in df.index.get_level_values("Country").unique():
+            print(country + ",")
+        return df
+
+    consumption = pd.read_csv("./consumption.csv")
+    unemployment = pd.read_csv("./unemployment.csv")
+    gdp = pd.read_csv("./gdp.csv")
+    if selected_countries is not None:
+        subselection = ["Period"] + selected_countries
+        consumption = consumption[subselection]
+        unemployment = unemployment[subselection]
+        gdp = gdp[subselection]
+    consumption = consumption.melt(
+        id_vars=["Period"], var_name="Country", value_name="Consumption"
     )
+    unemployment = unemployment.melt(
+        id_vars=["Period"], var_name="Country", value_name="Unemployment"
+    )
+    gdp = gdp.melt(id_vars=["Period"], var_name="Country", value_name="GDP")
     df = pd.merge(
         pd.merge(consumption, unemployment, on=["Period", "Country"], how="inner"),
         gdp,
         on=["Period", "Country"],
         how="inner",
     )
-    return filter_missing_data(df)
+    df.set_index(["Period", "Country"], inplace=True)
+    df = df[["Consumption", "GDP", "Unemployment"]]
+    df = df[(df.index.get_level_values("Period") > "2000-Q0")]  # missing data rows
+    df = filter_missing_data_from_countries(df)  # missing data columns
+    return df.sort_values(by=["Country", "Period"])
 
 
-def calculate_RMSE(data_shifts, finetune_steps):
+def calculate_RMSE(data_full, data_shifts, finetune_steps):
     total_squared_error = 0
     total_count = 0
     for data_shift in range(data_shifts):
@@ -111,17 +152,12 @@ def calculate_RMSE(data_shifts, finetune_steps):
     return np.sqrt(total_squared_error / total_count)
 
 
-data_full = load_data(selected_countries)
+data_full = load_data(None)
 
 # finetune_loss mse
 
 # finetune_loss rmse
-# RMSE for forecast_horizon 1 finetune rmse 40: 0.03139025746377753
-# RMSE for forecast_horizon 2 finetune rmse 34: 0.03460086005674839
-# RMSE for forecast_horizon 3 finetune rmse 30: 0.029738587917040836
-# RMSE for forecast_horizon 4 finetune rmse 27: 0.04026494214368676
-# RMSE for forecast_horizon 5 finetune rmse 28: 0.029208335669452835
-# RMSE for forecast_horizon 6 finetune rmse 29: 0.03468535072426604
+# RMSE for forecast_horizon 1 finetune rmse 35: 0.05957993940219445
 
 # there is an optimization to be made to use all the data points from an API
 # but that would slightly lower performance
@@ -134,20 +170,21 @@ for forecast_horizon in [
     6,
 ]:
     print()
+    # TODO rate limiting needs work
     time.sleep(1)
 
     # argmin of average_rmse
     # grid search
     finetune_cache = {}
     for finetune_steps in range(0, 51, 5):
-        average_rmse = calculate_RMSE(2, finetune_steps)
+        average_rmse = calculate_RMSE(data_full, 2, finetune_steps)
         finetune_cache[finetune_steps] = average_rmse
         print(
             f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {average_rmse}"
         )
     approximate_steps = min(finetune_cache, key=finetune_cache.get)
     for finetune_steps in range(max(0, approximate_steps - 4), approximate_steps + 4):
-        average_rmse = calculate_RMSE(2, finetune_steps)
+        average_rmse = calculate_RMSE(data_full, 2, finetune_steps)
         finetune_cache[finetune_steps] = average_rmse
         print(
             f"RMSE for forecast_horizon {forecast_horizon} finetune {finetune_loss} {finetune_steps}: {average_rmse}"
